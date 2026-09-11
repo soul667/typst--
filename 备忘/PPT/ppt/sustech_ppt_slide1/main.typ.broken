@@ -1,0 +1,401 @@
+#import "./lib.typ": slides, two-col, three-col
+#set text(font: ("inter", "Noto Sans SC"), size: 12pt)
+
+// 导入常用包（按需使用）
+// #import "@preview/cetz:0.4.2": canvas
+// #import "@preview/fletcher:0.5.8" as fletcher: edge, node
+// #import "@preview/frame-it:1.2.0": *
+
+// ════════════════════════════════════════════════════════════
+// 南方科技大学主题色（可选自定义）
+// ════════════════════════════════════════════════════════════
+#let sustech-orange = color.rgb(237, 108, 0)
+
+// ════════════════════════════════════════════════════════════
+// 模板配置
+// ════════════════════════════════════════════════════════════
+#show: slides.with(
+  title: "演示文稿标题",
+  subtitle: "副标题/说明",
+  date: "2026 / 03 / 25",
+  authors: ("古翱翔",),
+
+  // 页面设置
+  ratio: 16 / 9,        // 16:9 或 4/3
+  layout: "medium",     // small/medium/large
+
+  // 可选配置
+  toc: true,            // 是否显示目录
+  footer: false,        // 关闭页脚，为脚注留空间
+  count: none,          // 关闭右上角页面指示
+  theme: "normal",      // "normal"/"full"
+
+  // 可选：自定义颜色（默认使用南科大橙色）
+  // title-color: color.rgb(237, 108, 0),
+
+  // 可选：自定义Logo和章节图片
+  // logo: "img/SUSTech LOGO CN.svg",
+  // section-image: "img/页面 1.png",
+)
+
+// ════════════════════════════════════════════════════════════
+// Section 1: 研究动机
+// ════════════════════════════════════════════════════════════
+= 研究动机
+
+== 研究背景：数据驱动机器人操作的瓶颈
+
+*数据是通用机器人策略的核心燃料。* 机器人模仿学习的泛化能力与训练数据的规模和多样性呈*幂律关系*#super[@lin2024data]——然而当前最大的机器人数据集规模仍比视觉/语言数据小*10万倍以上*#super[@brohan2023rt1]#super[@khazatsky2024droid]#footnote[RT-1耗费17个月、13台机器人仅收集~13万条演示；DROID动用50名采集员、12个月积累7.6万条轨迹。]。尤其对双臂灵巧手与可变形物体操作，高维动作空间使数据需求呈指数增长#super[@liu2024rdt]#super[@chen2024dexmimicgen]。
+
+*解决方案：数据合成。* 核心问题——合成*能泛化到真机*且具备*多样性*（环境、物体、位姿、光照）的数据#footnote[不是和真机完全一致，而是能够泛化到真机；也非与真机毫无关联的传统仿真。]。
+
+#table(
+  columns: (1.2fr, 2fr, 2fr),
+  align: (left, left, left),
+  [*方法路线*], [*核心优势*], [*主要瓶颈*],
+  [真实采集 (遥操作)], [零虚实差距], [成本极高#super[@brohan2023rt1]、难以规模化],
+  [传统仿真 (MuJoCo/Isaac)], [GPU并行千倍加速], [资产缺物理属性；视觉+动力学双重鸿沟],
+  [*3DGS合成 (本研究)*], [*照片级逼真+可扩展*], [新兴方向；软体支持不完善],
+)
+
+我们聚焦*基于3DGS的数据合成*——成本低于真机采集，保真度高于传统仿真#super[@robosplat2025]#footnote[RoboSplat证实：单条演示+3DGS编辑即可将策略成功率从57.2%提升至87.8%。]。但现有方法局限于*有限刚体*，忽略动力学，缺乏系统性合成-迁移框架。
+
+
+== 研究目标
+
+#align(center)[
+  #block(
+    width: 100%,
+    fill: sustech-orange.lighten(90%),
+    inset: 1em,
+    radius: 25pt,
+    stroke: 1pt + sustech-orange.lighten(50%),
+  )[
+    *核心目标：* 构建首个*聚焦灵巧双臂与可变形物体*的 Real-to-Sim-to-Real 闭环数据合成框架——仅需 $1 arrow.r infinity$ 条演示，覆盖刚体与可变形物体，实现*零样本真机部署*。
+  ]
+]
+
+#two-col[
+  *探索合成数据的规律*
+  
+  + 合成数据与真实数据的*关键差距*在哪里？是否需要完全消除视觉鸿沟？
+  + 真实数据上的Scaling Law在合成数据中同样成立吗？#super[@lin2024data]
+  + 不同动力学参数如何影响策略的真机表现？
+][
+  *解决现有方法的瓶颈*
+  
+  + 构建VLM驱动的*仿真就绪*资产库#super[@mandlekar2023mimicgen]#super[@yu2025r2r2r]
+  + 设计双臂*时空解耦*引擎#super[@chen2024dexmimicgen]
+  + 融合3DGS+GNN实现*可变形物体*神经动力学仿真#super[@soma2025]#super[@phystwin2025]#footnote[GNN驱动高斯点实现力传播与真实变形，支持闭环Real-to-Sim校准。]
+  + 验证6+轴结构化域随机化的泛化增益
+]
+
+
+// ════════════════════════════════════════════════════════════
+// Section 2: 相关工作
+// ════════════════════════════════════════════════════════════
+= 相关工作
+
+== 现有数据合成方法对比
+
+#table(
+  columns: (2fr, 1fr, 1fr, 1.2fr, 1.5fr, 1.5fr),
+  align: (left, center, center, center, center, center),
+  [*方法*], [*单臂*], [*双臂*], [*可变形*], [*物体泛化*], [*Sim2Real*],
+  [MimicGen / SkillMimicGen#super[@mandlekar2023mimicgen]#super[@skillmimicgen2024]], [✅], [❌], [❌], [空间位姿], [5% / 35%#footnote[SkillMimicGen 通过技能分解将零样本 sim-to-real 从5%提升至35%（原论文 Table 2）。]],
+  [DemoGen#super[@demogen2025]], [✅], [✅], [有限], [空间位姿], [未报告],
+  [RoboSplat#super[@robosplat2025]], [✅], [❌], [❌], [6类实例], [✅ 87.8%],
+  [AOMGen#super[@aomgen2025]], [✅], [❌], [❌], [铰接体], [✅],
+  [R2R2R#super[@yu2025r2r2r]], [✅], [❌], [❌], [种类+姿态], [✅],
+  [RoboTwin 2.0#super[@robotwin2025]], [❌], [✅], [❌], [有限], [有限],
+  [Tether#super[@tether2026]], [✅], [❌], [❌], [语义], [✅],
+  [*DualDeform-Gen (Ours)*], [*✅*], [*✅*], [*✅*], [*全面*], [*目标>60%*],
+)
+
+== 三大技术瓶颈
+
+#three-col[
+  *瓶颈一：资产成本高昂*
+
+  现有3D模型库（ShapeNet, Objaverse）仅含几何网格，缺少质量/摩擦/碰撞体积/抓取点等物理交互语义，不是"仿真就绪"的。
+
+  MimicGen 零样本 sim-to-real 仅 *5%* 成功率#super[@mandlekar2023mimicgen]。
+][
+  *瓶颈二：双臂协同复杂性*
+
+  双臂动作空间翻倍导致高度*多模态动作分布*#super[@liu2024rdt]。
+
+  DexMimicGen#super[@chen2024dexmimicgen] 定义三类时空依赖：
+  - *并行*：左右手独立目标
+  - *协调*：双手共持物体
+  - *顺序*：因果依赖子任务
+][
+  *瓶颈三：可变形物体双重鸿沟*
+
+  *动力学鸿沟*：物理参数（杨氏模量、泊松比）极难现实辨识#super[@soma2025]#super[@phystwin2025]。
+
+  *视觉鸿沟*：软体受压/折叠时产生的高频几何细节（褶皱、自阴影），传统网格渲染无法逼真再现。
+]
+
+== 综述确认的领域空白
+
+#two-col[
+  *综述一：Robotic Manipulation via IL: Taxonomy*
+  (Li et al., 2025)
+
+  Section VII-B 5大 open challenges：
+  - _"Dual-arm collaborative manipulation and high-DoF manipulation are still in their early stages"_
+  - _"Current methods remain heavily reliant on expert data...restricts the scalability"_
+
+  *综述二：Interactive IL for Dexterous Manipulation*
+  (Frontiers, 2025)
+
+  - _"IIL for dexterous manipulation is an emerging field...notable gap in concrete studies"_
+  - 训练数据需求随动作空间维度*指数增长*
+][
+  #align(center)[
+    #block(
+      width: 100%,
+      fill: sustech-orange.lighten(90%),
+      inset: 1.2em,
+      radius: 20pt,
+      stroke: 1pt + sustech-orange.lighten(40%),
+    )[
+      *综合确认的核心 Gap*
+
+      #v(0.5em)
+      目前*无任何方法*同时低成本解决：
+
+      #v(0.3em)
+      *双臂协作* + *可变形物体* \
+      + *大规模物体泛化* \
+      的数据合成问题
+    ]
+  ]
+]
+
+// ════════════════════════════════════════════════════════════
+// Section 3: 方法
+// ════════════════════════════════════════════════════════════
+= 方法
+
+== DualDeform-Gen：四阶段 Real-to-Sim-to-Real 框架
+
+#align(center)[
+  #block(
+    width: 100%,
+    fill: sustech-orange.lighten(92%),
+    inset: 0.8em,
+    radius: 15pt,
+    stroke: 1pt + sustech-orange.lighten(50%),
+  )[
+    *输入*：5-10条人类演示 $arrow.r$ *输出*：50K+ 多样化合成轨迹 $arrow.r$ *结果*：零样本真机部署
+  ]
+]
+
+#v(0.5em)
+
+#table(
+  columns: (0.8fr, 2.5fr, 2fr, 1.5fr),
+  align: (center, left, left, left),
+  [*阶段*], [*核心工作*], [*技术手段*], [*输出*],
+  [Stage 
+== 我们通过实验想回答的问题
+
+#two-col[
+  *Q1：合成数据需要什么特性才能泛化到真机？*
+
+  + 是否需要完全消除 visual gap？还是动力学一致性更关键？
+  + 真实数据上的 Scaling Law 在合成数据中同样成立吗？#super[@lin2024data]
+  + 双臂场景中的饱和阈值与单臂的50-demo规律是否一致？
+  + 不同动力学参数偏差如何影响策略的真机表现？
+][
+  *Q2：我们的各个模块是否有效？*
+
+  + 3DGS-GNN 相比 纯渲染GS / 传统FEM 对软体任务的提升幅度？
+  + 双臂时空解耦引擎 vs 不解耦——协调任务成功率差异？
+  + 第6轴（物理参数随机化）对可变形物体泛化的独立贡献？
+  + 固定真实演示预算：0 / 10 / 50 条时，纯真实 vs 真实+合成 vs 纯合成？
+]
+
+// ════════════════════════════════════════════════════════════
+// 参考文献
+// ════════════════════════════════════════════════════════════
+= 参考文献
+== References
+
+#set text(font: ("Times New Roman", "FreeSerif"))
+#set par(leading: 0.5em)
+#columns(2, gutter: 1.2em)[
+  #bibliography("refs.bib")
+]
+��*], [*本工作*],
+    [Transformer], [~120ms], [隐式], [世界模型],
+    [Diffusion], [数秒], [无], [图像生成],
+  )
+
+  GNN 的*关系归纳偏置*天然适合建模局部粒子间力学交互#super[@phystwin2025]；推理延迟极低，支持实时候选轨迹评估。
+][
+  *GNN 力传播动力学*
+
+  相邻高斯点按欧氏距离建图 $G=(V,E)$：
+
+  $f_i = sum_(j in N(i)) phi_"edge"(x_i - x_j, v_i - v_j; theta) + f_("ext",i)$
+
+  $x_i (t + Delta t) = x_i(t) + v_i dot.c Delta t + (f_i \/ m_i) dot.c Delta t^2\/2$
+
+  弹性参数分解：$theta = theta_"material" plus.o theta_"geometry"$
+  - $theta_"material"$：材质固有弹性，跨同材质实例*共享*
+  - $theta_"geometry"$：从3DGS几何*自动推断*
+
+  闭环校准：可微渲染损失微调，每新*材质类别* 5-10 min#super[@soma2025]
+]
+
+== Stage 4：5+1 轴结构化域随机化
+
+在 RoboTwin 2.0#super[@robotwin2025]（5轴，报告228%零样本相对增益）基础上增加第6轴：
+
+#table(
+  columns: (1fr, 2.5fr, 2fr),
+  align: (center, left, left),
+  [*轴*], [*随机化内容*], [*目的*],
+  [① 杂乱度], [物理防碰撞随机干扰物放置], [抗背景干扰],
+  [② 光照], [色温 2700K-6500K + 光强 0.5-2.0×], [抗光照变化],
+  [③ 纹理], [生成式AI程序化合成桌面/墙壁纹理], [抗背景过拟合],
+  [④ 尺度], [桌面高度 + 物体几何尺寸微扰], [平移不变性],
+  [⑤ 指令], [LLM改写数十种语义等价句法], [语言泛化],
+  [*⑥ 物理参数*], [*刚度/摩擦/弹性系数随机化*], [*可变形物体鲁棒*],
+)
+
+#v(0.5em)
+*物体实例替换*：VLM驱动的仿真就绪资产库随机替换物体，实现真正的物体级泛化——*这是所有对比方法都不具备的能力*。
+
+// ════════════════════════════════════════════════════════════
+// Section 4: 实验
+// ════════════════════════════════════════════════════════════
+= 实验
+
+== 实验设计：平台与任务矩阵
+
+#two-col[
+  *硬件平台*
+
+  #table(
+    columns: (1.5fr, 2fr),
+    align: (left, left),
+    [*平台*], [*任务类型*],
+    [仿真 (MetaWorld)], [刚体抓取放置基准],
+    [仿真 (RoboTwin/自建)], [双臂协调任务],
+    [仿真 (Isaac + 3DGS-GNN)], [可变形物体交互],
+    [真实 Franka Panda], [单臂刚体/可变形验证],
+    [真实 方舟无限双臂], [双臂协调验证],
+    [真实 大族双臂], [跨平台泛化验证],
+  )
+][
+  *20个核心任务（4类）*
+
+  *刚体+铰接体* (4)：Pick-and-Place / Object Sorting / Articulated Opening#super[@aomgen2025] / Tool Use
+
+  *可变形物体* (7)：Cloth Fold/Unfold/Hang#super[@garmentlab2024] / Rope Routing / Soft Body Packing / *外卖袋 Opening+Packing*（美团横向合作）
+
+  *双臂协调* (5)：Bimanual Handover / Collaborative Lift / *Bimanual Cloth Shaking* / Assembly / *Bimanual Delivery Bag Shake*
+
+  *交叉验证* (4)：单→双臂迁移 / 刚体→可变形 / In-domain / Zero-shot 真机
+]
+
+== 关键消融实验
+
+#table(
+  columns: (2.5fr, 3fr),
+  align: (left, left),
+  [*实验*], [*验证目标*],
+  [*3D Scaling Law 曲线*], [固定演示时长，调节物体种类N/环境数M/每对演示数K，画三维 power-law 曲线#super[@lin2024data]],
+  [*双臂 Scaling Law 验证*], [*首次在双臂任务上验证*：对比单臂vs双臂场景下多样性-性能幂律关系，检验50-demo饱和阈值在双臂复杂动作空间是否仍成立],
+  [固定真实预算效率], [0/10/50条真实演示：纯真实 vs 真实+合成 vs 纯合成],
+  [世界模型消融], [无世界模型 vs 仅渲染GS vs 物理一致GS+GNN],
+  [移除双臂解耦引擎], [验证时空重绑定的独立贡献],
+  [移除GNN物理], [传统FEM vs GNN力传播对可变形任务的影响],
+  [域随机化轴数消融], [5轴 vs 5+1轴；单独消融指令轴与物理参数轴贡献],
+)
+
+== 预期结果与方法局限
+
+#two-col[
+  *预期结果*
+
+  #table(
+    columns: (1.5fr, 1fr, 1fr),
+    align: (left, center, center),
+    [*指标*], [*刚体*], [*可变形*],
+    [相对基线提升], [30-80%], [2-5×],
+    [Sim-Real 相关性], [> 0.9], [> 0.7],
+    [零样本成功率], [> 60%], [> 40%],
+  )
+
+  数据来源：AOMGen/RoboSplat 报告范围；PhysTwin 刚体已达 r=0.93#super[@phystwin2025]
+][
+  *核心局限*
+
+  + *材质校准*：每新材质类别需 100-500 帧视频独立校准（~5-10 min）；跨材质泛化为未来工作
+  + *GNN 能量守恒*：长 horizon (>100步) 可能误差累积；Hamiltonian 神经网络为改进方向
+  + *VLM 物理推断精度*：质量/摩擦约 20-40% 误差，需仿真验证过滤；但 SIMPLER#footnote[SIMPLER (Li et al., 2024) 发现 ±15% 物理参数偏差对策略评估影响有限。] 表明影响有限
+  + *计算成本*：完整流水线 ~1 GPU-week (4× A100)
+]
+
+// ════════════════════════════════════════════════════════════
+// Section 5: 结论
+// ════════════════════════════════════════════════════════════
+= 结论
+
+== 总结与贡献
+
+#align(center)[
+  #block(
+    width: 100%,
+    fill: sustech-orange.lighten(90%),
+    inset: 0.9em,
+    radius: 20pt,
+    stroke: 1pt + sustech-orange.lighten(45%),
+  )[
+    *DualDeform-Gen*：首个*同时支持灵巧双臂与可变形物体*的 Real-to-Sim-to-Real 闭环数据合成框架\
+    $1 arrow.r infinity$ 条演示 → 50K+ 合成轨迹 → 零样本真机部署
+  ]
+]
+
+#v(0.6em)
+
+#two-col[
+  *五大核心贡献*
+
+  + *统一框架*：首个同时覆盖单臂/双臂、刚体/铰接体/可变形物体的3DGS数据合成框架
+  + *自动化资产库*：VLM驱动将视频自动转化为仿真就绪资产，支持*10万级*规模
+  + *双臂解耦引擎*：并行/协调/顺序三类子任务自适应适配，OmniH2O重定向#super[@omnih2o2024]
+  + *GNN神经动力学*：3DGS+GNN同时消除动力学鸿沟与视觉鸿沟，支持闭环校准#super[@soma2025]#super[@phystwin2025]
+  + *Scaling Law 验证*：首次在双臂场景系统验证数据多样性的幂律效应#super[@lin2024data]
+][
+  *时间规划（6个月）*
+
+  #table(
+    columns: (1fr, 3fr),
+    align: (center, left),
+    [*阶段*], [*工作内容*],
+    [月1-2], [VLM资产流水线 + 单臂刚体基线],
+    [月2-3], [3DGS-GNN软体仿真 + 可变形重建],
+    [月3-4], [双臂解耦引擎 + TAMP集成],
+    [月4-5], [5+1轴域随机化 + 50K轨迹生成 + Scaling Law验证],
+    [月5-6], [真实部署评估 + 论文撰写],
+  )
+]
+
+// ════════════════════════════════════════════════════════════
+// 参考文献
+// ════════════════════════════════════════════════════════════
+= 参考文献
+== References
+
+#set text(font: ("Times New Roman", "FreeSerif"))
+#set par(leading: 0.5em)
+#columns(2, gutter: 1.2em)[
+  #bibliography("refs.bib")
+]
+

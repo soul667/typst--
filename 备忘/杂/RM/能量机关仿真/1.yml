@@ -1,0 +1,12 @@
+ID: THIS IS ID
+KeyPoints:
+  - Name: Key1
+    Point: [0, 0, 0]
+  - Name: Key2
+    Point: [0, 0, 0]
+
+Area:
+  - Name: Area1
+    Points: [[0, 0, 0], [0, 0, 0]]
+  - Name: Area2
+    Points: [[0, 0, 0], [0, 0, 0]]

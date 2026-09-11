@@ -1,0 +1,41 @@
+// #set math.equation(numbering: "(1)")
+// #set math.equation(numbering: "(1.1)")
+// #show math.equation.where(block: true): it => {
+//  if not it.has("label") {
+//    let fields = it.fields()
+//    fields.remove("body")
+//    fields.numbering = none
+//    return [#counter(math.equation).update(v => v - 1)#math.equation(..fields, it.body)<math-equation-without-label>]
+//  }
+//  return it
+// }
+// 
+
+// = 点云图预览
+// ```matlab
+// cd("WorkDir");
+// ptCloud = pcread('./1.ply');
+
+// % Visualize the point cloud
+// pcshow(ptCloud);
+// title('Point Cloud Visualization');
+// xlabel('X');
+// ylabel('Y');
+// zlabel('Z');
+// ```
+
+// = 点云处理
+// 首先对整体点云进行去噪，然后分割出我们需要识别的元件上的点。
+
+// 使用PointNet++进行点云分割，分割出我们要识别的弧线的点。对所有点，使用以弧长和曲率为特征的曲面进行梯度下降，使用不同的损失函数比较效果。
+
+// = 拟合圆柱面
+// @shakarji1998least 中对常见的数值拟合都有涉及，开始综述。
+
+
+// 定义参数：
+// / $x$: —圆筒轴上的一个点；
+// / $A$: —圆筒轴的方向数；
+// / $r$: —圆筒的半径。
+// $ "距离函数" f(x)=d(x_i)=f_i-r $
+// $ "损失函数" J(X,A,r)=sum d(x_i)^2 $
